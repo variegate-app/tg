@@ -34,12 +34,11 @@ jobs:
             registry: ${{ env.REGISTRY }}
             username: ${{ github.actor }}
             password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
-        uses: docker/build-push-action@v6
+      -
+        name: Build
+        uses: docker/bake-action@v6
         with:
-          context: ./deployments
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          args:
-            APPLICATION_NAME: api
+          files: |
+            ./deployments/docker-bake.hcl
+            cwd://${{ steps.meta.outputs.bake-file }}
+          targets: build
