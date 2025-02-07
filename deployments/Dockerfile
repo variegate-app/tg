@@ -8,7 +8,7 @@ WORKDIR /app
 ADD ../ ./
 
 # Build
-RUN go build -o ./application ./cmd/$APPLICATION_NAME
+RUN go build -o ./application ./cmd/api
 
 ## Runner
 FROM scratch AS dev-runner
