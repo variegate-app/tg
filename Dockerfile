@@ -5,10 +5,10 @@ ARG APPLICATION_NAME
 
 # Create a workspace for the app
 WORKDIR /app
-ADD ../ ./
+ADD ./ .
 
 # Build
-RUN go build -o ./application ./cmd/api
+RUN go build -o ./application ./cmd/$APPLICATION_NAME
 
 ## Runner
 FROM scratch AS dev-runner
