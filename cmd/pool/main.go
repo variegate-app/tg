@@ -47,7 +47,6 @@ func NewPool(token string, a string, pd, r time.Duration) *Pool {
 		poolTimeout:   pd,
 		reportTimeout: r,
 		reportAddress: a,
-		lastUpdateID:  0,
 	}
 }
 
