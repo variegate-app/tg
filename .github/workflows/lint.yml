@@ -1,12 +1,14 @@
-name: golangci-lint
+name: lint & test
 
 on:
   pull_request:
-  push:
     branches:
       - main
       - master
+  push:
+    branches:
       - feature/*
+  
 
 env:
   GO_VERSION: stable
@@ -41,3 +43,18 @@ jobs:
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           working-directory: ${{ matrix.modules }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code
+        uses: actions/checkout@v1
+
+      - name: Run Unit tests.
+        run: go test ./... -cover
