@@ -93,7 +93,7 @@ jobs:
             echo "    context: ." >> $GITHUB_WORKFLOW
             echo "    file: deployments/Dockerfile" >> $GITHUB_WORKFLOW
             echo "    push: ${{ github.event_name != 'pull_request' }}" >> $GITHUB_WORKFLOW
-            echo "    tags: "${metadata_output}" >> $GITHUB_WORKFLOW
+            echo "    tags: ${metadata_output}" >> $GITHUB_WORKFLOW
             echo "    labels: org.opencontainers.image.source=${{ github.repository }}" >> $GITHUB_WORKFLOW
             echo "    build-args: APPLICATION_NAME=$dir" >> $GITHUB_WORKFLOW
 
