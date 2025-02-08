@@ -86,12 +86,15 @@ jobs:
               exit 1
             fi
 
-            # Строим и пушим образ
-            docker/build-push-action@v6 \
-              --context "." \
-              --file "deployments/Dockerfile" \
-              --push "${{ github.event_name != 'pull_request' }}" \
-              --tags "${metadata_output}" \
-              --labels "org.opencontainers.image.source=${{ github.repository }}" \
-              --build-args "APPLICATION_NAME=$dir"
+            echo "Adding build and push step for application: $dir"
+            echo "- name: Build and push $dir" >> $GITHUB_WORKFLOW
+            echo "  uses: docker/build-push-action@v6" >> $GITHUB_WORKFLOW
+            echo "  with:" >> $GITHUB_WORKFLOW
+            echo "    context: ." >> $GITHUB_WORKFLOW
+            echo "    file: deployments/Dockerfile" >> $GITHUB_WORKFLOW
+            echo "    push: ${{ github.event_name != 'pull_request' }}" >> $GITHUB_WORKFLOW
+            echo "    tags: "${metadata_output}" >> $GITHUB_WORKFLOW
+            echo "    labels: org.opencontainers.image.source=${{ github.repository }}" >> $GITHUB_WORKFLOW
+            echo "    build-args: APPLICATION_NAME=$dir" >> $GITHUB_WORKFLOW
+
           done
