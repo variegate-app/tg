@@ -76,7 +76,8 @@ jobs:
           password: ${{ secrets.CI_TOKEN }}
 
       # Создаем метаданные и строим образы для каждого приложения
-      - name: Build and push $dir
+      # ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:v${{ github.ref_name }}
+      - name: Build and push ${{ matrix.application }}
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
@@ -86,6 +87,5 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:latest
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:v${{ github.ref_name }}
           labels: org.opencontainers.image.source=${{ github.repository }}
           build-args: APPLICATION_NAME=${{ matrix.application }}
