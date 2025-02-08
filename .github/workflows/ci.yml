@@ -122,7 +122,7 @@ jobs:
           # A personal access token for the GitHub repository in which the release will be created and edited.
           # It is recommended to create the access token with the following scopes: `repo, user, admin:repo_hook`.
           repo_token: ${{ secrets.CI_TOKEN }}
-          file: /tmp/${{ matrix.application }}
+          file: /tmp/*
           asset_name: binary
           tag: ${{ github.ref }}
           overwrite: true
