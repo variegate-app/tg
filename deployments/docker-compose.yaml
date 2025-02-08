@@ -1,0 +1,23 @@
+services:
+  tg:
+    container_name: tg_api
+    env_file: "./.env"
+    build:
+      context: ../
+      dockerfile: deployments/Dockerfile
+      target: dev-runner
+      args:
+        APPLICATION_NAME: api
+    command: "-a=tg_api:${SERVER_PORT}"
+    ports:
+      - "${LOCAL_PORT_SERVER}:${SERVER_PORT}"
+    volumes:
+      - telegram:/tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 40Mb
+volumes:
+  telegram:
+    name: telegram
