@@ -41,12 +41,13 @@ jobs:
 
           # Удаляем символы возврата каретки (\r) и преобразуем в строку через пробелы
           dirs=$(echo "$dirs" | tr '\r' ' ' | tr '\n' ' ')
-
-          # Убираем лишние пробелы в конце строки
           dirs=$(echo "$dirs" | sed 's/[[:space:]]*$//')
-
+          # Преобразуем в json
+          dirs=$(echo "$dirs" | jq -R 'split(" ")')
+          dirs=$(echo "$dirs" | tr '\r' ' ' | tr '\n' ' ')
+          dirs=$(echo "$dirs" | sed 's/[[:space:]]*$//')
           # Записываем результат в переменную окружения
-          echo "application=$(echo "$dirs" | jq -R 'split(" ")')" >> $GITHUB_OUTPUT
+          echo "application=$dirs" >> $GITHUB_OUTPUT
   ci:
     runs-on: ubuntu-latest
     needs: define-matrix
