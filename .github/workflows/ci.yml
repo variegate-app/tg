@@ -5,6 +5,9 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - feature/*
 
 env:
     REGISTRY: ghcr.io
@@ -20,38 +23,56 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Meta api
-        id: meta-api
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/api
-      - name: Meta pool
-        id: meta-pool
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/tg-pool
-      - name: Login to DockerHub
+
+      # Получаем список директорий в ./cmd/
+      - name: Get application list
+        id: get_applications
+        run: |
+          echo "dirs=$(find ./cmd -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)" >> $GITHUB_OUTPUT
+
+      # Проверяем, что список директорий не пустой
+      - name: Check if applications exist
+        if: steps.get_applications.outputs.dirs == ''
+        run: |
+          echo "No applications found in ./cmd/"
+          exit 1
+
+      # Создаем метаданные для каждого приложения
+      - name: Process metadata for each application
+        if: steps.get_applications.outputs.dirs != ''
+        run: |
+          # Разбиваем список директорий на массив
+          IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
+          for dir in "${dirs[@]}"; do
+            # Вызываем docker/metadata-action для каждого приложения
+            echo "Processing metadata for application: $dir"
+            docker/metadata-action@v5 \
+              --images "ghcr.io/${{ github.repository_owner }}/$dir" \
+              --tags "latest,${{ github.sha }},v${{ github.ref_name }}"
+          done
+
+      - name: Login to Docker Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
             registry: ${{ env.REGISTRY }}
             username: ${{ github.actor }}
             password: ${{ secrets.CI_TOKEN }}
-      - name: Build api
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deployments/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          build-args: APPLICATION_NAME=api
-      - name: Build pool
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deployments/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-pool.outputs.tags }}
-          labels: ${{ steps.meta-pool.outputs.labels }}
-          build-args: APPLICATION_NAME=pool
+
+      # Создаем и пушим image для каждого приложения
+      - name: Process create docker image for each application
+        if: steps.get_applications.outputs.dirs != ''
+        run: |
+          # Разбиваем список директорий на массив
+          IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
+          for dir in "${dirs[@]}"; do
+            # Вызываем docker/build-push-action для каждого приложения
+            echo "Processing image build for application: $dir"
+            build-push-action@v6 \
+              -- context: . \
+              -- file: deployments/Dockerfile \
+              -- push: ${{ github.event_name != 'pull_request' }} \
+              -- tags: ${{ steps.meta-api.outputs.tags }} \
+              -- labels: ${{ steps.meta-api.outputs.labels }} \
+              -- build-args: APPLICATION_NAME=$dir
+          done
