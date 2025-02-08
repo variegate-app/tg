@@ -1,4 +1,4 @@
-name: lint & test
+name: Lint & test
 
 on:
   pull_request:
@@ -53,4 +53,4 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Run Unit tests.
-        run: go test ./... -cover
+        run: go test ./... -cover && go test -v -race ./...
