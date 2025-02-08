@@ -18,6 +18,9 @@ jobs:
     outputs:
       application: ${{ steps.set-apps.outputs.application }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
       - name: Set apps
         id: set-apps
         run: |
