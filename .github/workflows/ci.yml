@@ -10,34 +10,57 @@ on:
       - feature/*
 
 env:
-  REGISTRY: ghcr.io
+    REGISTRY: ghcr.io
 
 jobs:
-  docker:
+  define-matrix:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-
+    outputs:
+      application: ${{ steps.set-apps.outputs.application }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Получаем список директорий в ./cmd/
-      - name: Get application list
-        id: get_applications
+      - name: Set apps
+        id: set-apps
         run: |
+          # Проверяем существование папки ./cmd/
           if [ ! -d "./cmd" ]; then
             echo "Error: Directory ./cmd does not exist."
             exit 1
           fi
+
+          # Используем find для получения только директорий в ./cmd/, преобразуем результат в строку через пробелы
           dirs=$(find ./cmd -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+
+          # Проверяем, что список не пустой
           if [ -z "$dirs" ]; then
             echo "Error: No directories found in ./cmd/"
             exit 1
           fi
-          echo "dirs=$dirs" >> $GITHUB_OUTPUT
+
+          # Удаляем символы возврата каретки (\r) и преобразуем в строку через пробелы
+          dirs=$(echo "$dirs" | tr '\r' ' ' | tr '\n' ' ')
+
+          # Убираем лишние пробелы в конце строки
+          dirs=$(echo "$dirs" | sed 's/[[:space:]]*$//')
+
+          # Записываем результат в переменную окружения
+          echo "application=$dirs" >> $GITHUB_OUTPUT
+  ci:
+    runs-on: ubuntu-latest
+    needs: define-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        application: ${{ needs.define-matrix.outputs.application }}
+        # не собираем приложение pool
+        # exclude:
+        #   - application: pool
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       # Логин в Docker Registry (выполняется только для событий, кроме pull_request)
       - name: Login to Docker Registry
@@ -48,25 +71,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.CI_TOKEN }}
 
-      # Строим и пушим образы для каждого приложения
-      - name: Build & Push for each application
-        if: steps.get_applications.outputs.dirs != ''
-        run: |
-          IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
-          for dir in "${dirs[@]}"; do
-            echo "Processing application: $dir"
-
-            # Определение шага для каждого приложения
-            echo "::add-job::Build & Push $dir"
-            echo "uses: docker/build-push-action@v6"
-            echo "with:"
-            echo "  context: ./cmd/$dir"
-            echo "  file: ./cmd/$dir/Dockerfile"
-            echo "  push: ${{ github.event_name != 'pull_request' }}"
-            echo "  tags: |
-                    ${{ env.REGISTRY }}/${{ github.repository_owner }}/$dir:latest
-                    ${{ env.REGISTRY }}/${{ github.repository_owner }}/$dir:${{ github.sha }}
-                    ${{ env.REGISTRY }}/${{ github.repository_owner }}/$dir:v${{ github.ref_name }}"
-            echo "  labels: org.opencontainers.image.source=${{ github.repository }}"
-            echo "  build-args: APPLICATION_NAME=$dir"
-          done
+      # Создаем метаданные и строим образы для каждого приложения
+      - name: Build and push $dir
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deployments/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:v${{ github.ref_name }}
+          labels: org.opencontainers.image.source=${{ github.repository }}
+          build-args: APPLICATION_NAME=${{ matrix.application }}
