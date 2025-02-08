@@ -87,5 +87,6 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:latest
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:${{ github.sha }}
-          labels: org.opencontainers.image.source=${{ github.repository }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repositoryUrl}}
           build-args: APPLICATION_NAME=${{ matrix.application }}
