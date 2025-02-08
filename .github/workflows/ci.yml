@@ -109,7 +109,7 @@ jobs:
         with:
           go-version: 1.23
       - name: Build ${{ matrix.application }}
-        run: go build -o /tmp/${{ matrix.application }} ./cmd/${{ matrix.application }} -v
+        run: go build -o /tmp/${{ matrix.application }} ./cmd/${{ matrix.application }}
       - name: Release Notes
         id: release-notes
         run: |
