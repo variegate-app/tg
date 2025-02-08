@@ -56,8 +56,8 @@ jobs:
       matrix:
         application: ${{ fromJSON(needs.define-matrix.outputs.application) }}
         # не собираем приложение pool
-        # exclude:
-        #   - application: pool
+        exclude:
+          - application: pool
     permissions:
       contents: read
       packages: write
