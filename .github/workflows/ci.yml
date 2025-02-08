@@ -83,19 +83,19 @@ jobs:
             password: ${{ secrets.CI_TOKEN }}
 
       # Создаем и пушим image для каждого приложения
-      - name: Process create docker image for each application
+      - name: Build & Push
         if: steps.get_applications.outputs.dirs != ''
         run: |
-          # Разбиваем список директорий на массив
           IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
           for dir in "${dirs[@]}"; do
-            # Вызываем docker/build-push-action для каждого приложения
-            echo "Processing image build for application: $dir"
-            build-push-action@v6 \
-              -- context: . \
-              -- file: deployments/Dockerfile \
-              -- push: ${{ github.event_name != 'pull_request' }} \
-              -- tags: ${{ steps.meta-api.outputs.tags }} \
-              -- labels: ${{ steps.meta-api.outputs.labels }} \
-              -- build-args: APPLICATION_NAME=$dir
+            echo "Adding build and push step for application: $dir"
+            echo "- name: Build and push $dir" >> $GITHUB_WORKFLOW
+            echo "  uses: docker/build-push-action@v6" >> $GITHUB_WORKFLOW
+            echo "  with:" >> $GITHUB_WORKFLOW
+            echo "    context: ." >> $GITHUB_WORKFLOW
+            echo "    file: deployments/Dockerfile" >> $GITHUB_WORKFLOW
+            echo "    push: ${{ github.event_name != 'pull_request' }}" >> $GITHUB_WORKFLOW
+            echo "    tags: ghcr.io/${{ github.repository_owner }}/$dir:${{ steps.meta-$dir.outputs.tags }}" >> $GITHUB_WORKFLOW
+            echo "    labels: org.opencontainers.image.source=${{ github.repository }}" >> $GITHUB_WORKFLOW
+            echo "    build-args: APPLICATION_NAME=$dir" >> $GITHUB_WORKFLOW
           done
