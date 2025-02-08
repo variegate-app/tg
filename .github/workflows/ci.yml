@@ -124,6 +124,7 @@ jobs:
           repo_token: ${{ secrets.CI_TOKEN }}
           file: /tmp/${{ matrix.application }}
           asset_name: ${{ matrix.application }}
+          make_latest: true
           tag: ${{ github.ref }}
           overwrite: true
           body: ${{ steps.release-notes.outputs.RELEASE_BODY }}
