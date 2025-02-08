@@ -58,44 +58,40 @@ jobs:
           echo "No applications found in ./cmd/"
           exit 1
 
-      # Создаем метаданные для каждого приложения
-      - name: Metadata
-        if: steps.get_applications.outputs.dirs != ''
-        run: |
-          IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
-          for dir in "${dirs[@]}"; do
-            echo "Processing metadata for application: $dir"
-            # Добавляем step для каждого приложения динамически
-            echo "- name: Metadata for $dir" >> $GITHUB_WORKFLOW
-            echo "  uses: docker/metadata-action@v5" >> $GITHUB_WORKFLOW
-            echo "  id: meta-$dir" >> $GITHUB_WORKFLOW
-            echo "  with:" >> $GITHUB_WORKFLOW
-            echo "    images: ghcr.io/${{ github.repository_owner }}/$dir" >> $GITHUB_WORKFLOW
-            echo "    tags: latest,${{ github.sha }},v${{ github.ref_name }}" >> $GITHUB_WORKFLOW
-          done
-
+      # Логин в Docker Registry (выполняется только для событий, кроме pull_request)
       - name: Login to Docker Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-            registry: ${{ env.REGISTRY }}
-            username: ${{ github.actor }}
-            password: ${{ secrets.CI_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.CI_TOKEN }}
 
-      # Создаем и пушим image для каждого приложения
-      - name: Build & Push
+      # Создаем метаданные и строим образы для каждого приложения
+      - name: Build & Push for each application
         if: steps.get_applications.outputs.dirs != ''
         run: |
           IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
           for dir in "${dirs[@]}"; do
-            echo "Adding build and push step for application: $dir"
-            echo "- name: Build and push $dir" >> $GITHUB_WORKFLOW
-            echo "  uses: docker/build-push-action@v6" >> $GITHUB_WORKFLOW
-            echo "  with:" >> $GITHUB_WORKFLOW
-            echo "    context: ." >> $GITHUB_WORKFLOW
-            echo "    file: deployments/Dockerfile" >> $GITHUB_WORKFLOW
-            echo "    push: ${{ github.event_name != 'pull_request' }}" >> $GITHUB_WORKFLOW
-            echo "    tags: ghcr.io/${{ github.repository_owner }}/$dir:${{ steps.meta-$dir.outputs.tags }}" >> $GITHUB_WORKFLOW
-            echo "    labels: org.opencontainers.image.source=${{ github.repository }}" >> $GITHUB_WORKFLOW
-            echo "    build-args: APPLICATION_NAME=$dir" >> $GITHUB_WORKFLOW
+            echo "Processing application: $dir"
+
+            # Генерация метаданных
+            metadata_output=$(docker/metadata-action@v5 \
+              --images "ghcr.io/${{ github.repository_owner }}/$dir" \
+              --tags "latest,${{ github.sha }},v${{ github.ref_name }}")
+
+            # Проверяем успешность генерации метаданных
+            if [ $? -ne 0 ]; then
+              echo "Failed to generate metadata for application: $dir"
+              exit 1
+            fi
+
+            # Строим и пушим образ
+            docker/build-push-action@v6 \
+              --context "." \
+              --file "deployments/Dockerfile" \
+              --push "${{ github.event_name != 'pull_request' }}" \
+              --tags "${metadata_output}" \
+              --labels "org.opencontainers.image.source=${{ github.repository }}" \
+              --build-args "APPLICATION_NAME=$dir"
           done
