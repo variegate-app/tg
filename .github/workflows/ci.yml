@@ -8,11 +8,55 @@ on:
 
 env:
     REGISTRY: ghcr.io
-    IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  docker:
+  define-matrix:
+    name: Find applications
     runs-on: ubuntu-latest
+    outputs:
+      application: ${{ steps.set-apps.outputs.application }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set apps
+        id: set-apps
+        run: |
+          # Проверяем существование папки ./cmd/
+          if [ ! -d "./cmd" ]; then
+            echo "Error: Directory ./cmd does not exist."
+            exit 1
+          fi
+
+          # Используем find для получения только директорий в ./cmd/, преобразуем результат в строку через пробелы
+          dirs=$(find ./cmd -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+
+          # Проверяем, что список не пустой
+          if [ -z "$dirs" ]; then
+            echo "Error: No directories found in ./cmd/"
+            exit 1
+          fi
+
+          # Удаляем символы возврата каретки (\r) и преобразуем в строку через пробелы
+          dirs=$(echo "$dirs" | tr '\r' ' ' | tr '\n' ' ')
+          dirs=$(echo "$dirs" | sed 's/[[:space:]]*$//')
+          # Преобразуем в json
+          dirs=$(echo "$dirs" | jq -R 'split(" ")')
+          dirs=$(echo "$dirs" | tr '\r' ' ' | tr '\n' ' ')
+          dirs=$(echo "$dirs" | sed 's/[[:space:]]*$//')
+          # Записываем результат в переменную окружения
+          echo "application=$dirs" >> $GITHUB_OUTPUT
+  ci:
+    name: Create Docker Images
+    runs-on: ubuntu-latest
+    needs: define-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        application: ${{ fromJSON(needs.define-matrix.outputs.application) }}
+        # не собираем приложение pool
+        exclude:
+          - application: pool
     permissions:
       contents: read
       packages: write
@@ -20,38 +64,67 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Meta api
-        id: meta-api
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/api
-      - name: Meta pool
-        id: meta-pool
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/tg-pool
-      - name: Login to DockerHub
+
+      # Логин в Docker Registry (выполняется только для событий, кроме pull_request)
+      - name: Login to Docker Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-            registry: ${{ env.REGISTRY }}
-            username: ${{ github.actor }}
-            password: ${{ secrets.CI_TOKEN }}
-      - name: Build api
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.CI_TOKEN }}
+
+      # Создаем метаданные и строим образы для каждого приложения
+      # ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:v${{ github.ref_name }}
+      - name: Build and push ${{ matrix.application }}
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deployments/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          build-args: APPLICATION_NAME=api
-      - name: Build pool
-        uses: docker/build-push-action@v6
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.application }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repositoryUrl}}
+          build-args: APPLICATION_NAME=${{ matrix.application }}
+  release-create:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: 
+      - define-matrix
+      - ci
+    strategy:
+      fail-fast: false
+      matrix:
+        application: ${{ fromJSON(needs.define-matrix.outputs.application) }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v2
         with:
-          context: .
-          file: deployments/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-pool.outputs.tags }}
-          labels: ${{ steps.meta-pool.outputs.labels }}
-          build-args: APPLICATION_NAME=pool
+          go-version: 1.23
+      - name: Build ${{ matrix.application }}
+        run: go build -o /tmp/${{ matrix.application }} ./cmd/${{ matrix.application }}
+      - name: Release Notes
+        id: release-notes
+        run: |
+          rel=$(git log $(git describe HEAD~ --tags --abbrev=0)..HEAD --pretty='format:* %h %s%n  * %an <%ae>' --no-merges)
+          echo "RELEASE_BODY=$rel" >> $GITHUB_OUTPUT
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_name: ${{ github.repository }}
+          # A personal access token for the GitHub repository in which the release will be created and edited.
+          # It is recommended to create the access token with the following scopes: `repo, user, admin:repo_hook`.
+          repo_token: ${{ secrets.CI_TOKEN }}
+          file: /tmp/${{ matrix.application }}
+          asset_name: ${{ matrix.application }}
+          make_latest: true
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: ${{ steps.release-notes.outputs.RELEASE_BODY }}
