@@ -62,14 +62,16 @@ jobs:
       - name: Process metadata for each application
         if: steps.get_applications.outputs.dirs != ''
         run: |
-          # Разбиваем список директорий на массив
           IFS=' ' read -r -a dirs <<< "${{ steps.get_applications.outputs.dirs }}"
           for dir in "${dirs[@]}"; do
-            # Вызываем docker/metadata-action для каждого приложения
             echo "Processing metadata for application: $dir"
-            docker/metadata-action@v5 \
-              --images "ghcr.io/${{ github.repository_owner }}/$dir" \
-              --tags "latest,${{ github.sha }},v${{ github.ref_name }}"
+            # Добавляем step для каждого приложения динамически
+            echo "- name: Metadata for $dir" >> $GITHUB_WORKFLOW
+            echo "  uses: docker/metadata-action@v5" >> $GITHUB_WORKFLOW
+            echo "  id: meta-$dir" >> $GITHUB_WORKFLOW
+            echo "  with:" >> $GITHUB_WORKFLOW
+            echo "    images: ghcr.io/${{ github.repository_owner }}/$dir" >> $GITHUB_WORKFLOW
+            echo "    tags: latest,${{ github.sha }},v${{ github.ref_name }}" >> $GITHUB_WORKFLOW
           done
 
       - name: Login to Docker Registry
